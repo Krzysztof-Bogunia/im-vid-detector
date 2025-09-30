@@ -33,6 +33,10 @@ DONE
 * after program is installed only step 3 is required to activate environment and run it  
 
 # Examples: 
+Default options:  
+![im-vid-detector_default_options](https://github.com/user-attachments/assets/a770cccc-06ee-4338-8bbf-5158b11151ef)
+
+
 1. Scanning image for any object with exact crop to detection:  
 ```console
 python im-vid-detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
