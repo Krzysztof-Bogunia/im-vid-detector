@@ -61,9 +61,15 @@ python im-vid-detector.py --input ./examples/images/ --prompt "document" --thres
 ```console
 python im-vid-detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --crop 1 --threshold 0.05 --crop_offset 0.02 --frame_skip 2 --model yoloe-11l-seg.pt
 ```
-|     BEFORE      |      AFTER     |
-| :-------------: | :------------: |
-| <video src="./examples/videos/video0.mp4" controls></video> | <video src="./examples/results_videos/video0.mp4" controls></video> | 
+|     BEFORE      |
+
+https://github.com/user-attachments/assets/23563fab-8639-477d-85ac-64a7c2f8f1b7
+
+|      AFTER     |
+
+
+https://github.com/user-attachments/assets/613effc8-d2d1-406c-936a-8778a215cdbd
+
 
 
 For prompt keywords check this list of predefined classes [classes](https://github.com/xinyu1205/recognize-anything/blob/main/ram/data/ram_tag_list.txt)
