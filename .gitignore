@@ -1,0 +1,5 @@
+temp/*
+*.pt
+*.pth
+*.ts
+*.venv
