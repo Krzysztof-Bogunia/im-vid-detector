@@ -312,10 +312,16 @@ if __name__ == "__main__":
         INPUT_PATH = str(args.input)
     if args.masks is not None:
         MASK_SAVE_PATH = str(args.masks)
+        MASK_SAVE_PATH = MASK_SAVE_PATH + str("/")
+        MASK_SAVE_PATH = MASK_SAVE_PATH.replace("//", "/")
     if args.output_media is not None:
         OUTPUT_MEDIA_PATH = str(args.output_media)
+        OUTPUT_MEDIA_PATH = OUTPUT_MEDIA_PATH + str("/")
+        OUTPUT_MEDIA_PATH = OUTPUT_MEDIA_PATH.replace("//", "/")
     if args.temp is not None:
         TEMP_PATH = str(args.temp)
+        TEMP_PATH = TEMP_PATH + str("/")
+        TEMP_PATH = TEMP_PATH.replace("//", "/")
     if args.prompt is not None:
         DETECTION_TEXTS = [str(args.prompt)]
     if args.crop is not None:
