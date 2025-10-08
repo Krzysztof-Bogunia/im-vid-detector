@@ -216,7 +216,6 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
                 )
                 video = ffmpeg.input(video_path).video
                 
-                # if((width != max_width) and (height != max_height)):
                 if True:
                     w2 = int(max_width)
                     h2 = int(height*max_width/width)
@@ -322,7 +321,6 @@ if __name__ == "__main__":
     FRAME_SKIP = 30
     MAX_FRAMES_NO_CROP = max(FRAME_SKIP*10, 48)
     MODEL_NAME = "yoloe-11m-seg-pf.pt" #"yoloe-11m-seg.pt" "yoloe-11m-seg-pf.pt"
-    # video_codec = "libx264"
     VIDEO_CRF = 23
     VIDEO_PRESET = "superfast"
     
@@ -332,8 +330,9 @@ if __name__ == "__main__":
     parser.add_argument("--output_media", help="output processed media path. Default value: ./output/media/", default=OUTPUT_MEDIA_PATH)
     parser.add_argument("--temp", help="output temporary media path (*CAN BE AUTOMATICALLY DELETED!*). Default value: ./temp/", default=TEMP_PATH)
     parser.add_argument("--prompt", help="target text description. Default value is empty so model should detect most likely class in input image", default=DETECTION_TEXTS[0])
+    parser.add_argument("--crop", help="whether to crop input images to size matching bounding box of detection {0;1}. Default value: 1", default=DO_CROP)
     parser.add_argument("--threshold", help="detection confidence threshold <0; 1>. Default value: 0.7", default=DETECT_THRESHOLD)
-    parser.add_argument("--crop_offset", help="detection bounding box crop size offset. Controls whether to crop input images to size matching bounding box of detection. Value is ratio of image size <-1; 1>. Default value: 0.04", default=CROP_SIZE_OFFSET)
+    parser.add_argument("--crop_offset", help="detection bounding box crop size offset. Value is ratio of image size <-1; 1>. Default value: 0.04", default=CROP_SIZE_OFFSET)
     parser.add_argument("--frame_skip", help="how many video frames to skip in each iteration of detection. Default value: 30", default=FRAME_SKIP)
     parser.add_argument("--model", help="name of the model for detection. Default value: yoloe-11m-seg-pf.pt (without text prompt) or yoloe-11m-seg.pt (with text prompt)", default=MODEL_NAME)
     parser.add_argument("--max_frames_no_crop", help="maximum number of video frames before cutting video and applying different crop. Default value: max(FRAME_SKIP*10, 48)", default=MAX_FRAMES_NO_CROP)
@@ -357,6 +356,8 @@ if __name__ == "__main__":
         TEMP_PATH = TEMP_PATH.replace("//", "/")
     if args.prompt is not None:
         DETECTION_TEXTS = [str(args.prompt)]
+    if args.crop is not None:
+        DO_CROP = bool(int(args.crop))
     if args.threshold is not None:
         DETECT_THRESHOLD = float(args.threshold)
     if args.crop_offset is not None:
@@ -371,10 +372,6 @@ if __name__ == "__main__":
         VIDEO_CRF = int(args.crf)
     if args.video_preset is not None:
         VIDEO_PRESET = str(args.video_preset)
-    if (CROP_SIZE_OFFSET == 0):
-        DO_CROP = False
-    else:
-        DO_CROP = True
         
     start = datetime.now()
     model = None
@@ -426,7 +423,6 @@ if __name__ == "__main__":
         if(file.endswith(".mp4") or file.endswith(".mkv")):
             num_videos = num_videos+1
             detections = []
-            # boxes = []
             cap = cv2.VideoCapture(MEDIA_PATH+file)
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             frame_rate = float(cap.get(cv2.CAP_PROP_FPS))
@@ -440,12 +436,8 @@ if __name__ == "__main__":
                 detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
                 if(detected):
                     num_detections = num_detections+1
-                    # detections.append(True)
-                    # boxes.append(bbox)
                     detections.append(VideoDetection(frame_n, True, bbox))
                 else:
-                    # detections.append(False)
-                    # boxes.append(bbox)
                     detections.append(VideoDetection(frame_n, False, bbox))
 
             if(len(detections) > 0):
