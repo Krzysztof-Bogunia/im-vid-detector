@@ -9,6 +9,21 @@ import time
 import shutil 
 import argparse
 
+class VideoSettings:
+    def __init__(self, frame_rate, h, w, VIDEO_CRF=23, VIDEO_PRESET="superfast"):
+        self.frame_rate = frame_rate
+        self.h = h
+        self.w = w
+        self.VIDEO_CRF = VIDEO_CRF
+        self.VIDEO_PRESET = VIDEO_PRESET
+        
+
+class VideoDetection:
+    def __init__(self, frame_n, detected, bbox):
+        self.frame_n = frame_n
+        self.detected = detected
+        self.bbox = bbox
+    
 def detect_objects(model, image, DETECT_THRESHOLD=0.2):
     # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = model.predict(image, conf=DETECT_THRESHOLD, verbose=False)
@@ -87,51 +102,56 @@ def bboxToRange(CROP_SIZE_OFFSET, h, w, bbox):
     y2 = min({y2+_CROP_SIZE_OFFSET, h})
     return x1,y1,x2,y2
 
-def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, frame_rate, DO_CROP, CROP_SIZE_OFFSET=0, TEMP_PATH="./temp/", MAX_FRAMES_NO_CUT=300):
+def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET=0, OUTPUT_MEDIA_PATH="./output/media/", TEMP_PATH="./temp/", MAX_FRAMES_NO_CROP=300):
     filename, extension = os.path.splitext(file)
+    w = videoSettings.w
+    h = videoSettings.h
+    frame_rate = videoSettings.frame_rate
+    VIDEO_CRF = videoSettings.VIDEO_CRF
+    VIDEO_PRESET = videoSettings.VIDEO_PRESET
     frame_detection_ranges = []
-    index_detection_ranges = []
     start_frame = 0
     end_frame = 0
     start_index = 0
     end_index = 0
     previous = False
+    forced_cut = False
     detection_boxes = []
-    box1 = []
-    if(not any(detections)):
+    if(not any(item.detected == True for item in detections)):
         return
     
     for i in range(0, len(detections), 1):
-        frame_n = i*FRAME_SKIP
-        if((detections[i] == True) and (previous == False)):
+        frame_n = detections[i].frame_n
+        if((detections[i].detected == True) and (previous == False)):
             start_frame = frame_n
             start_index = i
-            box1 = boxes[i]
-        elif( ((detections[i] == False) and (previous == True)) or
-            ( (detections[i] == True) and (i == (len(detections)-1))) ):
+        elif( ((detections[i].detected == False) and (previous == True)) or
+            ( (detections[i].detected == True) and (i == (len(detections)-1))) ):
             end_frame = frame_n
             end_index = i-1
             frame_detection_ranges.append([start_frame, end_frame])
-            index_detection_ranges.append([start_index, end_index])
-            box2 = boxes[i-1]
-            box_detection_range = np.array(boxes[start_index:(end_index+1)])
+            box_detection_range = np.array([b.bbox for b in detections[start_index:(end_index+1)] if any(b.bbox)])
             box_detection_range = box_detection_range[~np.isnan(box_detection_range).any(axis=1)]
-            bbox = [np.min(box_detection_range, axis=0)[0], np.min(box_detection_range, axis=0)[1], np.max(box_detection_range, axis=0)[2], np.max(box_detection_range, axis=0)[3]]
+            bbox = np.array([np.min(box_detection_range, axis=0)[0], np.min(box_detection_range, axis=0)[1], np.max(box_detection_range, axis=0)[2], np.max(box_detection_range, axis=0)[3]])
             detection_boxes.append(bbox)
-        elif(DO_CROP and (detections[i] == True) and (len(frame_detection_ranges) > 0) and (previous == True) and 
-             ((frame_n - start_frame) > MAX_FRAMES_NO_CUT)):
+        elif(DO_CROP and (detections[i].detected == True) and (len(frame_detection_ranges) > 0) and (previous == True) and 
+             ((frame_n - start_frame) > MAX_FRAMES_NO_CROP) and 
+             (not forced_cut) and
+             (np.sum(np.absolute(detections[i].bbox) - detection_boxes[-1]) > 1)):
+            forced_cut = True
             previous = False
-            end_frame = frame_n
-            end_index = i
+            end_frame = frame_n-1
+            end_index = i-1
             frame_detection_ranges.append([start_frame, end_frame])
-            index_detection_ranges.append([start_index, end_index])
-            box2 = boxes[i-1]
-            box_detection_range = np.array([b for b in boxes[start_index:(end_index+1)] if any(b)])
+            box_detection_range = np.array([b.bbox for b in detections[start_index:(end_index+1)] if any(b.bbox)])
             box_detection_range = box_detection_range[~np.isnan(box_detection_range).any(axis=1)]
-            bbox = [np.min(box_detection_range, axis=0)[0], np.min(box_detection_range, axis=0)[1], np.max(box_detection_range, axis=0)[2], np.max(box_detection_range, axis=0)[3]]
+            bbox = np.array([np.min(box_detection_range, axis=0)[0], np.min(box_detection_range, axis=0)[1], np.max(box_detection_range, axis=0)[2], np.max(box_detection_range, axis=0)[3]])
             detection_boxes.append(bbox)
+            #reuse this frame
+            i = i-1
             continue
-        previous = detections[i]
+        previous = detections[i].detected
+        forced_cut = False
         
     if not os.path.exists(TEMP_PATH):
         os.makedirs(TEMP_PATH)
@@ -190,7 +210,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, fr
                 video = video.crop(x1,y1,width,height)
                 (
                     ffmpeg
-                    .output( video, filename=video_path, loglevel="quiet")
+                    .output( video, filename=video_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
                     .overwrite_output()
                     .run()
                 )
@@ -217,7 +237,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, fr
                     time.sleep(1)
                     (
                         ffmpeg
-                        .output( video, filename=video_path, vf="scale="+str(w2)+":"+str(h2)+",setsar="+str(1), loglevel="quiet")
+                        .output( video, filename=video_path, vf="scale="+str(w2)+":"+str(h2)+",setsar="+str(1), loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
                         .overwrite_output()
                         .run()
                     )
@@ -228,14 +248,14 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, fr
             if(has_audio):
                 (
                     ffmpeg
-                    .output(video, audio, TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet")
+                    .output(video, audio, TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
                     .overwrite_output()
                     .run()
                 )
             else:
                 (
                     ffmpeg
-                    .output(video, TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet")
+                    .output(video, TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
                     .overwrite_output()
                     .run()
                 )
@@ -251,6 +271,15 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, fr
         partial_files.append(clip.video)
         if (has_audio):
             partial_files.append(clip.audio)
+    
+    output_file_path = OUTPUT_MEDIA_PATH + file
+    #get new path if file already exists
+    if os.path.exists(output_file_path):
+        filename, extension = os.path.splitext(output_file_path)
+        iter = 1
+        while os.path.exists(output_file_path):
+            output_file_path = filename + " (" + str(iter) + ")" + extension
+            iter = iter + 1
     if (has_audio):
         concatenated = (
             ffmpeg
@@ -259,7 +288,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, fr
         )
         (
             ffmpeg
-            .output(concatenated[0], concatenated[1], OUTPUT_MEDIA_PATH + file, loglevel="quiet")
+            .output(concatenated[0], concatenated[1], output_file_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
             .overwrite_output()
             .run()
         )
@@ -271,7 +300,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, fr
         )
         (
             ffmpeg
-            .output(concatenated[0], OUTPUT_MEDIA_PATH + file, loglevel="quiet")
+            .output(concatenated[0], output_file_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
             .overwrite_output()
             .run()
         )
@@ -291,23 +320,27 @@ if __name__ == "__main__":
     DETECT_THRESHOLD = 0.7 # 0.02 0.05 0.17 0.7
     CROP_SIZE_OFFSET = 0.04
     FRAME_SKIP = 30
-    MAX_FRAMES_NO_CUT = max(FRAME_SKIP*5, 48)
+    MAX_FRAMES_NO_CROP = max(FRAME_SKIP*10, 48)
     MODEL_NAME = "yoloe-11m-seg-pf.pt" #"yoloe-11m-seg.pt" "yoloe-11m-seg-pf.pt"
+    # video_codec = "libx264"
+    VIDEO_CRF = 23
+    VIDEO_PRESET = "superfast"
     
-    parser = argparse.ArgumentParser(description="img_vid_masker")
+    parser = argparse.ArgumentParser(description="Image and video detector. Program can scan all media in folder using AI model and return only those that match specified target. Processing is done locally.")
     parser.add_argument("--input", help="input media path. Default value: ./input/", default=INPUT_PATH)
     parser.add_argument("--masks", help="output masks path. Default value: ./output/masks/", default=MASK_SAVE_PATH)
     parser.add_argument("--output_media", help="output processed media path. Default value: ./output/media/", default=OUTPUT_MEDIA_PATH)
     parser.add_argument("--temp", help="output temporary media path (*CAN BE AUTOMATICALLY DELETED!*). Default value: ./temp/", default=TEMP_PATH)
     parser.add_argument("--prompt", help="target text description. Default value is empty so model should detect most likely class in input image", default=DETECTION_TEXTS[0])
-    parser.add_argument("--crop", help="whether to crop input images to size matching bounding box of detection {0;1}. Default value: 1", default=DO_CROP)
     parser.add_argument("--threshold", help="detection confidence threshold <0; 1>. Default value: 0.7", default=DETECT_THRESHOLD)
-    parser.add_argument("--crop_offset", help="detection bounding box crop size offset defined as ratio of pixels <-1; 1>. Default value: 0.04", default=CROP_SIZE_OFFSET)
+    parser.add_argument("--crop_offset", help="detection bounding box crop size offset. Controls whether to crop input images to size matching bounding box of detection. Value is ratio of image size <-1; 1>. Default value: 0.04", default=CROP_SIZE_OFFSET)
     parser.add_argument("--frame_skip", help="how many video frames to skip in each iteration of detection. Default value: 30", default=FRAME_SKIP)
     parser.add_argument("--model", help="name of the model for detection. Default value: yoloe-11m-seg-pf.pt (without text prompt) or yoloe-11m-seg.pt (with text prompt)", default=MODEL_NAME)
+    parser.add_argument("--max_frames_no_crop", help="maximum number of video frames before cutting video and applying different crop. Default value: max(FRAME_SKIP*10, 48)", default=MAX_FRAMES_NO_CROP)
+    parser.add_argument("--crf", help="ffmpeg argument for quality of output video (best quality is VIDEO_CRF=0). Default value: 23", default=VIDEO_CRF)
+    parser.add_argument("--video_preset", help="ffmpeg argument for encoding preset of output video. Default value: superfast", default=VIDEO_PRESET)
     
     args = parser.parse_args()
-    # parser.print_help()
     if args.input is not None:
         INPUT_PATH = str(args.input)
     if args.masks is not None:
@@ -324,8 +357,6 @@ if __name__ == "__main__":
         TEMP_PATH = TEMP_PATH.replace("//", "/")
     if args.prompt is not None:
         DETECTION_TEXTS = [str(args.prompt)]
-    if args.crop is not None:
-        DO_CROP = bool(int(args.crop))
     if args.threshold is not None:
         DETECT_THRESHOLD = float(args.threshold)
     if args.crop_offset is not None:
@@ -334,7 +365,17 @@ if __name__ == "__main__":
         FRAME_SKIP = int(args.frame_skip)
     if args.model is not None:
         MODEL_NAME = str(args.model)
-    
+    if args.max_frames_no_crop is not None:
+        MAX_FRAMES_NO_CROP = int(args.max_frames_no_crop)
+    if args.crf is not None:
+        VIDEO_CRF = int(args.crf)
+    if args.video_preset is not None:
+        VIDEO_PRESET = str(args.video_preset)
+    if (CROP_SIZE_OFFSET == 0):
+        DO_CROP = False
+    else:
+        DO_CROP = True
+        
     start = datetime.now()
     model = None
     if(len(DETECTION_TEXTS[0]) > 0):
@@ -385,12 +426,13 @@ if __name__ == "__main__":
         if(file.endswith(".mp4") or file.endswith(".mkv")):
             num_videos = num_videos+1
             detections = []
-            boxes = []
+            # boxes = []
             cap = cv2.VideoCapture(MEDIA_PATH+file)
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             frame_rate = float(cap.get(cv2.CAP_PROP_FPS))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            videoSettings = VideoSettings(frame_rate,h,w,VIDEO_CRF,VIDEO_PRESET)
             for i in range(0, frame_count, FRAME_SKIP):
                 frame_n = i
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_n-1)
@@ -398,14 +440,16 @@ if __name__ == "__main__":
                 detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
                 if(detected):
                     num_detections = num_detections+1
-                    detections.append(True)
-                    boxes.append(bbox)
+                    # detections.append(True)
+                    # boxes.append(bbox)
+                    detections.append(VideoDetection(frame_n, True, bbox))
                 else:
-                    detections.append(False)
-                    boxes.append(bbox)
+                    # detections.append(False)
+                    # boxes.append(bbox)
+                    detections.append(VideoDetection(frame_n, False, bbox))
 
-            if(len(boxes) > 0):
-                video_cut_and_merge_detections(MEDIA_PATH, file, detections, boxes, w, h, frame_rate, DO_CROP, CROP_SIZE_OFFSET, "./temp/", MAX_FRAMES_NO_CUT)
+            if(len(detections) > 0):
+                video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET, OUTPUT_MEDIA_PATH, TEMP_PATH, MAX_FRAMES_NO_CROP)
 
 
     stop = datetime.now()

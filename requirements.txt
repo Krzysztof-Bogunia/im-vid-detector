@@ -3,3 +3,5 @@ opencv-python
 ultralytics
 moviepy
 ffmpeg-python
+
+clip @ git+https://github.com/ultralytics/CLIP.git
