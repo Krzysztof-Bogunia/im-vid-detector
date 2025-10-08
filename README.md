@@ -33,10 +33,43 @@ DONE
 * after program is installed only step 3 is required to activate environment and run it  
 
 # Examples: 
-Default options:  
-![im-vid-detector_default_options](https://github.com/user-attachments/assets/a770cccc-06ee-4338-8bbf-5158b11151ef)
+## Default options:  
+usage: im-vid-detector.py [-h] [--input INPUT] [--masks MASKS] [--output_media OUTPUT_MEDIA] [--temp TEMP] [--prompt PROMPT]
+                          [--threshold THRESHOLD] [--crop_offset CROP_OFFSET] [--frame_skip FRAME_SKIP] [--model MODEL]
+                          [--max_frames_no_crop MAX_FRAMES_NO_CROP] [--crf CRF] [--video_preset VIDEO_PRESET]  
 
+Image and video detector. Program can scan all media in folder using AI model and return only those that match specified target.
+Processing is done locally.  
 
+options:  
+  **-h, --help**            
+                        show this help message and exit  
+  **--input INPUT**         
+                        input media path. Default value: ./input/  
+  **--masks MASKS**         
+                        output masks path. Default value: ./output/masks/  
+  **--output_media OUTPUT_MEDIA**  
+                        output processed media path. Default value: ./output/media/  
+  **--temp TEMP**           
+                        output temporary media path (*CAN BE AUTOMATICALLY DELETED!*). Default value: ./temp/  
+  **--prompt PROMPT**       
+                        target text description. Default value is empty so model should detect most likely class in input image  
+  **--threshold THRESHOLD**  
+                        detection confidence threshold <0; 1>. Default value: 0.7  
+  **--crop_offset CROP_OFFSET**  
+                        detection bounding box crop size offset. Controls whether to crop input images to size matching bounding box of detection. Value is ratio of image size <-1; 1>. Default value: 0.04  
+  **--frame_skip FRAME_SKIP**  
+                        how many video frames to skip in each iteration of detection. Default value: 30  
+  **--model MODEL**     name of the model for detection. Default value: yoloe-11m-seg-pf.pt (without text prompt) or
+                        yoloe-11m-seg.pt (with text prompt)  
+  **--max_frames_no_crop MAX_FRAMES_NO_CROP**  
+                        maximum number of video frames before cutting video and applying different crop. Default value: max(FRAME_SKIP*10, 48)  
+  **--crf CRF**          
+                        ffmpeg argument for quality of output video (best quality is VIDEO_CRF=0). Default value: 23  
+  **--video_preset VIDEO_PRESET**  
+                        ffmpeg argument for encoding preset of output video. Default value: superfast  
+
+## Program usage:
 1. Scanning image for any object with exact crop to detection:  
 ```console
 .venv/bin/python im-vid-detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
@@ -61,9 +94,9 @@ Default options:
 | :-------------: | :------------: |
 | ![image1_before](./examples/images/image1.jpg)  | ![image1_after](./examples/results_images/image1.jpg) | 
 
-4. Scanning all videos for "sword,magic weapon,medieval sword":  
+4. Scanning all videos for "sword,magic weapon,medieval sword" with additional parameters:  
 ```console
-.venv/bin/python im-vid-detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --crop 1 --threshold 0.05 --crop_offset 0.02 --frame_skip 2 --model yoloe-11l-seg.pt
+.venv/bin/python im-vid-detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --threshold 0.05 --crop_offset 0.02 --model yoloe-11l-seg.pt --frame_skip 2 --max_frames_no_crop 600 --crf 20 --video_preset fast
 ```
 |     BEFORE      |
 
