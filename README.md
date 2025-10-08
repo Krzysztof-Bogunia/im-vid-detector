@@ -59,6 +59,8 @@ options:
                         output temporary media path (*CAN BE AUTOMATICALLY DELETED!*). Default value: ./temp/  
   **--prompt PROMPT**       
                         target text description. Default value is empty so model should detect most likely class in input image  
+    **--crop CROP**           
+                        whether to crop input images to size matching bounding box of detection {0;1}. Default value: 1  
   **--threshold THRESHOLD**  
                         detection confidence threshold <0; 1>. Default value: 0.7  
   **--crop_offset CROP_OFFSET**  
