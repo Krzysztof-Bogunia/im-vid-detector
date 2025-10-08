@@ -1,6 +1,11 @@
 # About:  
 Locally used image and video detection program. Images and videos can be scanned for any object so that they will be cropped by the program and detections copied to output folder.  
-Main features of this program: image/video detection of any class with cropping, automatic trimming and merging of video clips, efficient video processing (can do detection in less time than video duration and doesn't require 100+GB of RAM).  
+
+## Main features of this program:  
+- image/video detection of any class with cropping to bounding box  
+- automatic trimming and merging of video clips  
+- efficient video processing (can do detection in less time than video duration and doesn't require 100+GB of RAM).  
+
 Default AI model for detection is "yoloe-11m-seg-pf.pt" or "yoloe-11m-seg.pt" depending on whether user specifies target text prompt.  
 When scanning images, each one is processed by AI model and if detection confidence is above threshold then image will be cropped to bounding box of detection and saved to output folder. Program will also save mask of the object detected with highest confidence.  
 Scanning videos is similar to images, but the difference is that only every N-th frame is processed and resulting videos are merged from clips of detections. Also masks are not created for videos.  
@@ -60,7 +65,8 @@ options:
                         detection bounding box crop size offset. Controls whether to crop input images to size matching bounding box of detection. Value is ratio of image size <-1; 1>. Default value: 0.04  
   **--frame_skip FRAME_SKIP**  
                         how many video frames to skip in each iteration of detection. Default value: 30  
-  **--model MODEL**     name of the model for detection. Default value: yoloe-11m-seg-pf.pt (without text prompt) or
+  **--model MODEL**     
+                        name of the model for detection. Default value: yoloe-11m-seg-pf.pt (without text prompt) or
                         yoloe-11m-seg.pt (with text prompt)  
   **--max_frames_no_crop MAX_FRAMES_NO_CROP**  
                         maximum number of video frames before cutting video and applying different crop. Default value: max(FRAME_SKIP*10, 48)  
