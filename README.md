@@ -39,7 +39,7 @@ Default options:
 
 1. Scanning image for any object with exact crop to detection:  
 ```console
-python im-vid-detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
+.venv/bin/python im-vid-detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
 ```
 |     BEFORE      |      AFTER     |
 | :-------------: | :------------: |
@@ -47,7 +47,7 @@ python im-vid-detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
 
 2. Scanning all images for "statue,monument,brick building,brickwork". Threshold for prompt detection often needs to be much lower than in prompt-less detection (especially for unusual objects):  
 ```console
-python im-vid-detector.py --input ./examples/images/ --prompt "statue,monument" --threshold 0.02
+.venv/bin/python im-vid-detector.py --input ./examples/images/ --prompt "statue,monument" --threshold 0.02
 ```
 |     BEFORE      |      AFTER     |
 | :-------------: | :------------: |
@@ -55,7 +55,7 @@ python im-vid-detector.py --input ./examples/images/ --prompt "statue,monument" 
 
 3. Scanning all images for "document".
 ```console
-python im-vid-detector.py --input ./examples/images/ --prompt "document" --threshold 0.05
+.venv/bin/python im-vid-detector.py --input ./examples/images/ --prompt "document" --threshold 0.05
 ```
 |     BEFORE      |      AFTER     |
 | :-------------: | :------------: |
@@ -63,7 +63,7 @@ python im-vid-detector.py --input ./examples/images/ --prompt "document" --thres
 
 4. Scanning all videos for "sword,magic weapon,medieval sword":  
 ```console
-python im-vid-detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --crop 1 --threshold 0.05 --crop_offset 0.02 --frame_skip 2 --model yoloe-11l-seg.pt
+.venv/bin/python im-vid-detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --crop 1 --threshold 0.05 --crop_offset 0.02 --frame_skip 2 --model yoloe-11l-seg.pt
 ```
 |     BEFORE      |
 
