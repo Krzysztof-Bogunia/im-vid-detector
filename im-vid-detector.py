@@ -102,7 +102,7 @@ def bboxToRange(CROP_SIZE_OFFSET, h, w, bbox):
     y2 = min({y2+_CROP_SIZE_OFFSET, h})
     return x1,y1,x2,y2
 
-def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET=0, TEMP_PATH="./temp/", MAX_FRAMES_NO_CROP=300):
+def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET=0, OUTPUT_MEDIA_PATH="./output/media/", TEMP_PATH="./temp/", MAX_FRAMES_NO_CROP=300):
     filename, extension = os.path.splitext(file)
     w = videoSettings.w
     h = videoSettings.h
@@ -271,6 +271,15 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
         partial_files.append(clip.video)
         if (has_audio):
             partial_files.append(clip.audio)
+    
+    output_file_path = OUTPUT_MEDIA_PATH + file
+    #get new path if file already exists
+    if os.path.exists(output_file_path):
+        filename, extension = os.path.splitext(output_file_path)
+        iter = 1
+        while os.path.exists(output_file_path):
+            output_file_path = filename + " (" + str(iter) + ")" + extension
+            iter = iter + 1
     if (has_audio):
         concatenated = (
             ffmpeg
@@ -279,7 +288,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
         )
         (
             ffmpeg
-            .output(concatenated[0], concatenated[1], OUTPUT_MEDIA_PATH + file, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
+            .output(concatenated[0], concatenated[1], output_file_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
             .overwrite_output()
             .run()
         )
@@ -291,7 +300,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
         )
         (
             ffmpeg
-            .output(concatenated[0], OUTPUT_MEDIA_PATH + file, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
+            .output(concatenated[0], output_file_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
             .overwrite_output()
             .run()
         )
@@ -440,7 +449,7 @@ if __name__ == "__main__":
                     detections.append(VideoDetection(frame_n, False, bbox))
 
             if(len(detections) > 0):
-                video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET, "./temp/", MAX_FRAMES_NO_CROP)
+                video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET, OUTPUT_MEDIA_PATH, TEMP_PATH, MAX_FRAMES_NO_CROP)
 
 
     stop = datetime.now()
