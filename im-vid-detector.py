@@ -191,6 +191,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
             if video_probe['streams']:
                 has_video = True
             if(not has_video):
+                print("WARNING:video stream not detected when processing video clips")
                 continue
             if(has_audio):
                 audio = audio.filter('atrim', start=t1, end=t2).filter('asetpts', 'PTS-STARTPTS')
@@ -306,7 +307,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
         
     if os.path.exists(TEMP_PATH):
         shutil.rmtree(TEMP_PATH) 
-    return OUTPUT_MEDIA_PATH + file
+    return output_file_path
 
 if __name__ == "__main__":
     

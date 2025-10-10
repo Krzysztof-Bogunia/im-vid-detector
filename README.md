@@ -15,6 +15,7 @@ Supported input file types are: .jpg, .png, .mp4, .mkv
 ## Windows only steps - setup WSL first, then [continue](#Installation-inside-venv) with the installation inside venv
 1. If WSL is not installed then install it according to [instructions](https://learn.microsoft.com/en-us/windows/wsl/install) and reboot computer.  
 2. Launch WSL.  
+<<<<<<< Updated upstream
 3. Update Ubuntu system inside WSL and install python tools  
    ```console
    sudo apt update && sudo apt upgrade -y && sudo apt install python3-venv python-is-python3 -y;
@@ -23,6 +24,23 @@ Supported input file types are: .jpg, .png, .mp4, .mkv
    ```console
    explorer.exe .
     ```  
+=======
+3. Update Ubuntu system inside WSL and install python tools and ffmpeg  
+   ```console
+    sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y  
+    ```
+4. [optionally] run command to open file explorer inside WSL directory.  
+    ```console
+    explorer.exe .
+    ```  
+
+## Ubuntu only steps - setup system first, then [continue](#Installation-inside-venv) with the installation inside venv
+Update Ubuntu system and install python tools and ffmpeg  
+```console  
+sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y  
+```  
+
+>>>>>>> Stashed changes
 ## Installation inside venv
 Use those commands to download program from github and install dependencies in virtual environment:  
 <!-- ## Linux (fish shell)   -->
