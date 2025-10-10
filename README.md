@@ -12,21 +12,38 @@ Scanning videos is similar to images, but the difference is that only every N-th
 Supported input file types are: .jpg, .png, .mp4, .mkv
 
 # Installation:  
+## Windows only steps - setup WSL first, then [continue](#Installation-inside-venv) with the installation inside venv
+1. If WSL is not installed then install it according to [instructions](https://learn.microsoft.com/en-us/windows/wsl/install) and reboot computer.  
+2. Launch WSL.  
+3. Update Ubuntu system inside WSL and install python tools  
+   ```console
+   sudo apt update && sudo apt upgrade -y && sudo apt install python3-venv python-is-python3 -y;
+    ```
+4. [optionally] run command to open file explorer inside WSL directory.  
+   ```console
+   explorer.exe .
+    ```  
+## Installation inside venv
 Use those commands to download program from github and install dependencies in virtual environment:  
+<!-- ## Linux (fish shell)   -->
 1. clone program's repository and go to main folder  
    ```console
-   git clone https://github.com/Krzysztof-Bogunia/im-vid-detector.git
-   cd im-vid-detector
-    ```
-2. create venv  
+   git clone https://github.com/Krzysztof-Bogunia/im-vid-detector.git && cd im-vid-detector
+   ```
+2. create venv in current directory  
     ```console
    python -m venv .venv
     ```
-3. activate venv (for fish shell)*  
-   ```console
-   source .venv/bin/activate.fish
+3. activate venv (choose depending on platform, by default "a")  
+    a. **Linux (default bash shell)**    
+    ```console
+    source .venv/bin/activate
+    ```  
+    b. Linux (fish shell)   
+    ```console
+    source .venv/bin/activate.fish
     ```
-4. download pytorch (with cuda 12.9)  
+4. download pytorch (with cuda 12.9 - other versions may work too)  
    ```console
    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
     ```
@@ -34,10 +51,12 @@ Use those commands to download program from github and install dependencies in v
    ```console
    pip install -r requirements.txt
     ```  
+
 DONE
-* after program is installed only step 3 is required to activate environment and run it  
+* after everything is installed only step 3 is required to activate the environment and run the program  
 
 # Examples: 
+The following examples assume that you are in main program's directory and virtual environment is activated as shown in installation step 3.  
 ## Default options:  
 usage: im-vid-detector.py [-h] [--input INPUT] [--masks MASKS] [--output_media OUTPUT_MEDIA] [--temp TEMP] [--prompt PROMPT]
                           [--threshold THRESHOLD] [--crop_offset CROP_OFFSET] [--frame_skip FRAME_SKIP] [--model MODEL]
