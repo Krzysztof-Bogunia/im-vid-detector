@@ -16,31 +16,31 @@ Supported input file types are: .jpg, .png, .mp4, .mkv
 1. If WSL is not installed then install it according to [instructions](https://learn.microsoft.com/en-us/windows/wsl/install) and reboot computer.  
 2. Launch WSL.  
 3. Update Ubuntu system inside WSL and install python tools and ffmpeg  
-   ```console
-    sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y  
-    ```
+```console
+sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y
+```
 4. [optionally] run command to open file explorer inside WSL directory.  
-    ```console
-    explorer.exe .
-    ```  
+```console
+explorer.exe .
+```  
 
 ## Ubuntu only steps - setup system first, then [continue](#Installation-inside-venv) with the installation inside venv
 Update Ubuntu system and install python tools and ffmpeg  
 ```console  
-sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y  
+sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y
 ```  
 
 ## Installation inside venv
 Use those commands to download program from github and install dependencies in virtual environment:  
 <!-- ## Linux (fish shell)   -->
 1. clone program's repository and go to main folder  
-   ```console
-   git clone https://github.com/Krzysztof-Bogunia/im-vid-detector.git && cd im-vid-detector
-   ```
+```console
+git clone https://github.com/Krzysztof-Bogunia/im-vid-detector.git && cd im-vid-detector
+```
 2. create venv in current directory  
-    ```console
-   python -m venv .venv
-    ```
+```console
+python -m venv .venv
+```
 3. activate venv (choose depending on platform, by default "a")  
     a. **Linux (default bash shell)**    
     ```console
@@ -51,13 +51,13 @@ Use those commands to download program from github and install dependencies in v
     source .venv/bin/activate.fish
     ```
 4. download pytorch (with cuda 12.9 - other versions may work too)  
-   ```console
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
-    ```
+```console
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
+```
 5. install the rest of dependencies  
-   ```console
-   pip install -r requirements.txt
-    ```  
+```console
+pip install -r requirements.txt
+```  
 
 DONE
 * after everything is installed only step 3 is required to activate the environment and run the program  
