@@ -17,7 +17,7 @@ Supported input file types are: .jpg, .png, .mp4, .mkv
 2. Launch WSL.  
 3. Update Ubuntu system inside WSL and install python tools and ffmpeg  
 ```console
-sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y
+sudo apt update && sudo apt upgrade -y && sudo apt install git ffmpeg python3-venv python-is-python3 python3-tk -y
 ```
 4. [optionally] run command to open file explorer inside WSL directory.  
 ```console
@@ -27,13 +27,12 @@ explorer.exe .
 ## Ubuntu only steps - setup system first, then [continue](#Installation-inside-venv) with the installation inside venv
 Update Ubuntu system and install python tools and ffmpeg  
 ```console  
-sudo apt update && sudo apt upgrade -y && sudo apt install ffmpeg python3-venv python-is-python3 -y
+sudo apt update && sudo apt upgrade -y && sudo apt install git ffmpeg python3-venv python-is-python3 python3-tk -y
 ```  
 
 ## Installation inside venv
 Use those commands to download program from github and install dependencies in virtual environment:  
-<!-- ## Linux (fish shell)   -->
-1. clone program's repository and go to main folder  
+1. clone program repository and go to main folder  
 ```console
 git clone https://github.com/Krzysztof-Bogunia/im-vid-detector.git && cd im-vid-detector
 ```
@@ -60,12 +59,11 @@ pip install -r requirements.txt
 ```  
 
 DONE
-* after everything is installed only step 3 is required to activate the environment and run the program  
+* after everything is installed only step 3 can be required in normal program usage to activate the environment and run the program  
 
 # Examples: 
-The following examples assume that you are in main program's directory and virtual environment is activated as shown in installation step 3.  
 ## Default options:  
-usage: im-vid-detector.py [-h] [--input INPUT] [--masks MASKS] [--output_media OUTPUT_MEDIA] [--temp TEMP] [--prompt PROMPT]
+usage: im_vid_detector.py [-h] [--input INPUT] [--masks MASKS] [--output_media OUTPUT_MEDIA] [--temp TEMP] [--prompt PROMPT]
                           [--threshold THRESHOLD] [--crop_offset CROP_OFFSET] [--frame_skip FRAME_SKIP] [--model MODEL]
                           [--max_frames_no_crop MAX_FRAMES_NO_CROP] [--crf CRF] [--video_preset VIDEO_PRESET]  
 
@@ -104,9 +102,21 @@ options:
                         ffmpeg argument for encoding preset of output video. Default value: superfast  
 
 ## Program usage:
+The following examples assume that user is in main program directory.  
+### Graphical interface  
+Start program by double clicking on **run_gui.sh** or open console and run the following command  
+```console
+./run_gui.sh
+```
+Example video processing 
+![gui_video_detection](./resources/gui_video_detection.png)
+
+### CLI  
+If venv is not currently activated then activate as shown in installation step 3 [instructions](#Installation-inside-venv).  
+
 1. Scanning image for any object with exact crop to detection:  
 ```console
-.venv/bin/python im-vid-detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
+python im_vid_detector.py --input ./examples/images/image0.jpg --crop_offset 0.0
 ```
 |     BEFORE      |      AFTER     |
 | :-------------: | :------------: |
@@ -114,7 +124,7 @@ options:
 
 2. Scanning all images for "statue,monument,brick building,brickwork". Threshold for prompt detection often needs to be much lower than in prompt-less detection (especially for unusual objects):  
 ```console
-.venv/bin/python im-vid-detector.py --input ./examples/images/ --prompt "statue,monument" --threshold 0.02
+python im_vid_detector.py --input ./examples/images/ --prompt "statue,monument" --threshold 0.02
 ```
 |     BEFORE      |      AFTER     |
 | :-------------: | :------------: |
@@ -122,7 +132,7 @@ options:
 
 3. Scanning all images for "document".
 ```console
-.venv/bin/python im-vid-detector.py --input ./examples/images/ --prompt "document" --threshold 0.05
+python im_vid_detector.py --input ./examples/images/ --prompt "document" --threshold 0.05
 ```
 |     BEFORE      |      AFTER     |
 | :-------------: | :------------: |
@@ -130,7 +140,7 @@ options:
 
 4. Scanning all videos for "sword,magic weapon,medieval sword" with additional parameters:  
 ```console
-.venv/bin/python im-vid-detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --threshold 0.05 --crop_offset 0.02 --model yoloe-11l-seg.pt --frame_skip 2 --max_frames_no_crop 600 --crf 20 --video_preset fast
+python im_vid_detector.py --input ./examples/videos/ --prompt "sword,magic weapon,medieval sword" --threshold 0.05 --crop_offset 0.02 --model yoloe-11l-seg.pt --frame_skip 2 --max_frames_no_crop 600 --crf 20 --video_preset superfast
 ```
 |     BEFORE      |
 

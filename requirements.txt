@@ -5,3 +5,7 @@ moviepy
 ffmpeg-python
 
 clip @ git+https://github.com/ultralytics/CLIP.git
+
+#GUI
+tk
+FreeSimpleGUI
