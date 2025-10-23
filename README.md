@@ -61,7 +61,7 @@ pip install -r requirements.txt
 DONE
 * after everything is installed only step 3 can be required in normal program usage to activate the environment and run the program  
 
-# Examples: 
+# Program usage: 
 ## Default options:  
 usage: im_vid_detector.py [-h] [--input INPUT] [--masks MASKS] [--output_media OUTPUT_MEDIA] [--temp TEMP] [--prompt PROMPT]
                           [--threshold THRESHOLD] [--crop_offset CROP_OFFSET] [--frame_skip FRAME_SKIP] [--model MODEL]
@@ -101,7 +101,7 @@ options:
   **--video_preset VIDEO_PRESET**  
                         ffmpeg argument for encoding preset of output video. Default value: superfast  
 
-## Program usage:
+## Examples:
 The following examples assume that user is in main program directory.  
 ### Graphical interface  
 Start program by double clicking on **run_gui.sh** or open console and run the following command  
