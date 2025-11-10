@@ -7,6 +7,7 @@ from datetime import datetime
 import ffmpeg
 import time
 import argparse
+import gc
 
 INPUT_PATH = "./input/"
 MASK_SAVE_PATH = "./output/masks/"
@@ -39,10 +40,11 @@ arg_descriptions = {
 }
 
 class VideoSettings:
-    def __init__(self, frame_rate, h, w, VIDEO_CRF=23, VIDEO_PRESET="superfast"):
+    def __init__(self, frame_rate, h, w, frame_count, VIDEO_CRF=23, VIDEO_PRESET="superfast"):
         self.frame_rate = frame_rate
         self.h = h
         self.w = w
+        self.frame_count = frame_count
         self.VIDEO_CRF = VIDEO_CRF
         self.VIDEO_PRESET = VIDEO_PRESET
         
@@ -52,6 +54,35 @@ class VideoDetection:
         self.detected = detected
         self.bbox = bbox
     
+def secondsToHHMMSS(seconds):
+    hhmmss = time.strftime("%H:%M:%S", time.gmtime(int(seconds)))
+    int_val = int(seconds)
+    decimal_val = seconds-int(seconds)
+    hhmmss = hhmmss[0:-2] + "{:02d}".format(int(hhmmss[-2:])) + "." + str(decimal_val).replace("0.", "")
+    return hhmmss
+
+def HHMMSSToSeconds(hhmmss):
+    totalSeconds = 0.0
+    values = hhmmss.split(':')
+    ratios = [1.0, 60.0, 3600.0, 86400] # [seconds, minutes, hours, days]
+    for i in range(len(values)):
+        text_num = values[-i-1].lstrip('0')
+        if(len(text_num) > 0):
+            x = float(eval(text_num)) * ratios[i]
+            totalSeconds = totalSeconds + x
+    return totalSeconds
+
+#get new path if file already exists
+def suggest_path(output_file_path):
+    suggested_path = output_file_path
+    if os.path.exists(suggested_path):
+        filename, extension = os.path.splitext(suggested_path)
+        iter = 1
+        while os.path.exists(suggested_path):
+            suggested_path = filename + " (" + str(iter) + ")" + extension
+            iter = iter + 1
+    return suggested_path
+
 def detect_objects(model, image, DETECT_THRESHOLD=0.2):
     # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = model.predict(image, conf=DETECT_THRESHOLD, verbose=False)
@@ -116,7 +147,7 @@ def process_frame(model, image, DETECT_THRESHOLD=0.2):
         bbox[3] = int(bbox[3] * (h/h2))
     return detected, mask, bbox, score
 
-def bboxToRange(CROP_SIZE_OFFSET, h, w, bbox):
+def bbox_offset(bbox, CROP_SIZE_OFFSET, h, w):
     _CROP_SIZE_OFFSET = CROP_SIZE_OFFSET
     if((_CROP_SIZE_OFFSET > 0.0) and (_CROP_SIZE_OFFSET < 1.0)):
         _CROP_SIZE_OFFSET = int(_CROP_SIZE_OFFSET * min([w,h]))
@@ -124,17 +155,55 @@ def bboxToRange(CROP_SIZE_OFFSET, h, w, bbox):
         _CROP_SIZE_OFFSET = int(_CROP_SIZE_OFFSET * min([w,h]))
     _CROP_SIZE_OFFSET = int(_CROP_SIZE_OFFSET)
     x1, y1, x2, y2 = bbox
-    x1 = max({x1-_CROP_SIZE_OFFSET, 0})
-    y1 = max({y1-_CROP_SIZE_OFFSET, 0})
-    x2 = min({x2+_CROP_SIZE_OFFSET, w})
-    y2 = min({y2+_CROP_SIZE_OFFSET, h})
+    x1 = max({int(x1)-_CROP_SIZE_OFFSET, 0})
+    y1 = max({int(y1)-_CROP_SIZE_OFFSET, 0})
+    x2 = min({int(x2)+_CROP_SIZE_OFFSET, w})
+    y2 = min({int(y2)+_CROP_SIZE_OFFSET, h})
     return x1,y1,x2,y2
+
+def get_streams_id(path):
+    video_index = None
+    audio_index = None
+    video_probe = ffmpeg.probe(path, select_streams='V')
+    audio_probe = ffmpeg.probe(path, select_streams='a')
+    if video_probe['streams']:
+        video_index = int(video_probe['streams'][0]['index'])
+    if audio_probe['streams']:
+        audio_index = int(audio_probe['streams'][0]['index'])
+    return video_index, audio_index
+
+def merge_video_files(partial_files, output_file_path):
+    dir_path = os.path.dirname(output_file_path) + str("/")
+    dir_path = dir_path.replace("//", "/")
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    output_file_path2 = suggest_path(output_file_path)
+
+    paths_separated = []
+    for file in partial_files:
+        paths_separated.append("file "+"'file:"+os.path.abspath(file)+"'"+"\n")
+    for i in range(len(paths_separated)):
+        if(len(paths_separated[i].replace("\n", "")) <= 0):
+            paths_separated.pop(i)
+    temp_concat_file = TEMP_PATH+"concat.txt"
+    open(temp_concat_file, 'w').writelines(paths_separated)
+    (
+        ffmpeg
+        .input(temp_concat_file, format='concat', safe=0)
+        .output(output_file_path2, c='copy', loglevel="quiet")
+        .run()
+    )
+    if os.path.exists(temp_concat_file):
+        os.remove(temp_concat_file)
+    return output_file_path
 
 def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET=0, OUTPUT_MEDIA_PATH="./output/media/", TEMP_PATH="./temp/", MAX_FRAMES_NO_CROP=300):
     filename, extension = os.path.splitext(file)
     w = videoSettings.w
     h = videoSettings.h
     frame_rate = videoSettings.frame_rate
+    frame_count = videoSettings.frame_count
     VIDEO_CRF = videoSettings.VIDEO_CRF
     VIDEO_PRESET = videoSettings.VIDEO_PRESET
     frame_detection_ranges = []
@@ -145,6 +214,8 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
     previous = False
     forced_cut = False
     detection_boxes = []
+    collected = gc.collect()
+
     if(not any(item.detected == True for item in detections)):
         return
     
@@ -180,6 +251,12 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
             continue
         previous = detections[i].detected
         forced_cut = False
+    #add last fragment of video
+    if( (detections[-1].detected == True) and (frame_detection_ranges[-1][1] < (frame_count-2)) ):
+        start_frame = frame_detection_ranges[-1][1]+1
+        end_frame = frame_count
+        frame_detection_ranges.append([start_frame, end_frame])
+        detection_boxes.append(detection_boxes[-1])
         
     if not os.path.exists(TEMP_PATH):
         os.makedirs(TEMP_PATH)
@@ -189,7 +266,7 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
     if(DO_CROP):
         for i in range(0, len(frame_detection_ranges)):
             bbox = detection_boxes[i]
-            x1, y1, x2, y2 = bboxToRange(CROP_SIZE_OFFSET, h, w, bbox)
+            x1, y1, x2, y2 = bbox_offset(bbox, CROP_SIZE_OFFSET, h, w)
             width = (x2-x1)
             height = (y2-y1)
             max_width = max(max_width, width)
@@ -205,135 +282,97 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
     num_clips = 0
     for i in range(0, len(frame_detection_ranges)):
         t1 = frame_detection_ranges[i][0]/frame_rate
-        t2 = frame_detection_ranges[i][1]/frame_rate
+        t2 = min(frame_detection_ranges[i][1]+1.0, frame_count)/frame_rate
         try:
-            clip = ffmpeg.input(MEDIA_PATH+file)
-            video = clip.video.filter('trim', start=t1, end=t2).setpts('PTS-STARTPTS')
-            audio = clip.audio
+            video = None
+            audio = None
+            video_index = 0
+            audio_index = 1
             has_audio = False
             has_video = False
-            audio_probe = ffmpeg.probe(MEDIA_PATH+file, select_streams='a')
-            video_probe = ffmpeg.probe(MEDIA_PATH+file, select_streams='v')
-            if audio_probe['streams']:
-                has_audio = True
-            if video_probe['streams']:
-                has_video = True
+            video_index, audio_index = get_streams_id(MEDIA_PATH+file)
+            if audio_index is not None:
+                if audio_index >= 0:
+                    has_audio = True
+                    audio = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1), to=secondsToHHMMSS(t2))[str(audio_index)]
+            if video_index is not None:
+                if video_index >= 0:
+                    has_video = True
+                    video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1), to=secondsToHHMMSS(t2))[str(video_index)]
             if(not has_video):
                 print("WARNING:video stream not detected when processing video clips")
                 continue
-            if(has_audio):
-                audio = audio.filter('atrim', start=t1, end=t2).filter('asetpts', 'PTS-STARTPTS')
             if(DO_CROP):
                 num_processing = 0
                 bbox = detection_boxes[i]
-                x1, y1, x2, y2 = bboxToRange(CROP_SIZE_OFFSET, h, w, bbox)
+                x1, y1, x2, y2 = bbox_offset(bbox, CROP_SIZE_OFFSET, h, w)
                 width = (x2-x1)
                 height = (y2-y1)
                 # handle width,height must be divisible by 2 for ffmpeg
-                width = int(int(width/2) * 2)
-                height = int(int(height/2) * 2)
+                width = int(int(width/2-1) * 2)
+                height = int(int(height/2-1) * 2)
                 centerx = x1+int(width/2)
                 centery = y1+int(height/2)
                 num_processing = num_processing+1
                 video_path = TEMP_PATH+"part"+str(num_clips)+"_video"+str(num_processing)+extension
-                video = video.crop(x1,y1,width,height)
-                (
-                    ffmpeg
-                    .output( video, filename=video_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
-                    .overwrite_output()
-                    .run()
-                )
-                temp_files.append(video_path)
-                video = ffmpeg.input(video_path).video
-                
-                if True:
+                w2 = int(max_width)
+                h2 = int(height*max_width/width)
+                if(abs(max_width - width) > abs(max_height-height)):
+                    h2 = int(max_height)
+                    w2 = int(width*max_height/height)
+                if(w2 > max_width):
+                    h2 = int(h2*max_width/w2)
                     w2 = int(max_width)
-                    h2 = int(height*max_width/width)
-                    if(abs(max_width - width) > abs(max_height-height)):
-                        h2 = int(max_height)
-                        w2 = int(width*max_height/height)
-                    if(w2 > max_width):
-                        h2 = int(h2*max_width/w2)
-                        w2 = int(max_width)
-                    if(h2 > max_height):
-                        w2 = int(w2*max_height/h2)
-                        h2 = int(max_height)
-                    # handle width,height must be divisible by 2 for ffmpeg
-                    w2 = int(int(w2/2) * 2)
-                    h2 = int(int(h2/2) * 2)
-                    num_processing = num_processing+1
-                    video_path = TEMP_PATH+"part"+str(num_clips)+"_video"+str(num_processing)+extension
+                if(h2 > max_height):
+                    w2 = int(w2*max_height/h2)
+                    h2 = int(max_height)
+                # handle width,height must be divisible by 2 for ffmpeg
+                w2 = int(int(w2/2) * 2)
+                h2 = int(int(h2/2) * 2)
+                video = video.filter('crop', width, height, x1, y1)
+                video = video.filter('scale', w2, h2)
+                video = video.filter('pad', int(max_width), int(max_height), int(-1), int(-1))
+                video = video.filter('setsar', 1)
+                if(has_audio):                
                     (
                         ffmpeg
-                        .output( video, filename=video_path, vf="scale="+str(w2)+":"+str(h2)+",setsar="+str(1), loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
+                        .output( video, audio, filename=TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
                         .overwrite_output()
                         .run()
                     )
-                    temp_files.append(video_path)
-                    video = ffmpeg.input(video_path).video
-                    
-                if((width != max_width) or (height != max_height)):
-                    video = video.filter('pad', width=int(max_width), height=int(max_height), x=int(-1), y=int(-1))
-            if(has_audio):
-                (
-                    ffmpeg
-                    .output(video, audio, TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
-                    .overwrite_output()
-                    .run()
-                )
-            else:
-                (
-                    ffmpeg
-                    .output(video, TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
-                    .overwrite_output()
-                    .run()
-                )
+                else:
+                    (
+                        ffmpeg
+                        .output( video, filename=TEMP_PATH+"part"+str(num_clips)+extension, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
+                        .overwrite_output()
+                        .run()
+                    )
             temp_files.append(TEMP_PATH+"part"+str(num_clips)+extension)
             num_clips = num_clips+1
         except:
             print("error when processing fragment of: "+file + ". Skipping clip.")
     #merge partial clips
-    streams = []
     partial_files = []
     for i in range(0, num_clips):
-        clip = ffmpeg.input(TEMP_PATH+"part"+str(i)+extension)
-        streams.append(clip)
-        partial_files.append(clip.video)
-        if (has_audio):
-            partial_files.append(clip.audio)
+        video = None
+        audio = None
+        has_audio = False
+        has_video = False
+        video_index, audio_index = get_streams_id(TEMP_PATH+"part"+str(i)+extension)
+        if audio_index is not None:
+            if audio_index >= 0:
+                has_audio = True
+        if video_index is not None:
+            if video_index >= 0:
+                has_video = True
+                partial_files.append(TEMP_PATH+"part"+str(i)+extension)
+        if(not has_video):
+            print("WARNING:video stream not detected when processing video clips")
+            continue
     
     output_file_path = OUTPUT_MEDIA_PATH + file
-    #get new path if file already exists
-    if os.path.exists(output_file_path):
-        filename, extension = os.path.splitext(output_file_path)
-        iter = 1
-        while os.path.exists(output_file_path):
-            output_file_path = filename + " (" + str(iter) + ")" + extension
-            iter = iter + 1
-    if (has_audio):
-        concatenated = (
-            ffmpeg
-            .concat(*partial_files, v=1, a=1)
-            .node
-        )
-        (
-            ffmpeg
-            .output(concatenated[0], concatenated[1], output_file_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
-            .overwrite_output()
-            .run()
-        )
-    else:
-        concatenated = (
-            ffmpeg
-            .concat(*partial_files, v=1)
-            .node
-        )
-        (
-            ffmpeg
-            .output(concatenated[0], output_file_path, loglevel="quiet", preset=VIDEO_PRESET, crf=VIDEO_CRF)
-            .overwrite_output()
-            .run()
-        )
+    output_file_path = suggest_path(output_file_path)
+    output_file_path = merge_video_files(partial_files, output_file_path)
         
     for f in temp_files:
         if os.path.exists(f):
@@ -402,6 +441,8 @@ def main(   INPUT_PATH=INPUT_PATH,
     if args.video_preset is not None:
         VIDEO_PRESET = str(args.video_preset)
         
+    collected = gc.collect()
+
     start = datetime.now()
     model = None
     if(len(DETECTION_TEXTS[0]) > 0):
@@ -446,35 +487,94 @@ def main(   INPUT_PATH=INPUT_PATH,
                     os.makedirs(OUTPUT_MEDIA_PATH)
                 output_image = image
                 if(DO_CROP):
-                    x1, y1, x2, y2 = bboxToRange(CROP_SIZE_OFFSET, h, w, bbox)
+                    x1, y1, x2, y2 = bbox_offset(bbox, CROP_SIZE_OFFSET, h, w)
                     output_image = output_image[y1:y2, x1:x2]
                 save_image(mask, MASK_SAVE_PATH + file)
                 save_image(output_image, OUTPUT_MEDIA_PATH + file)
                 
         if(file.endswith(".mp4") or file.endswith(".mkv")):
+            collected = gc.collect()
+            video = None
+            audio = None
+            video_index = 0
+            audio_index = 1
+            has_video = False
+            video_index, audio_index = get_streams_id(MEDIA_PATH+file)
+            if video_index >= 0:
+                has_video = True
+            else:
+                print("-skipping file without video stream")
+                continue
             num_videos = num_videos+1
             detections = []
-            cap = cv2.VideoCapture(MEDIA_PATH+file)
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            frame_rate = float(cap.get(cv2.CAP_PROP_FPS))
-            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            videoSettings = VideoSettings(frame_rate,h,w,VIDEO_CRF,VIDEO_PRESET)
-            for i in range(0, frame_count, FRAME_SKIP):
-                frame_n = i
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_n-1)
-                res, image = cap.read()
-                detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
-                if(detected):
-                    num_detections = num_detections+1
-                    detections.append(VideoDetection(frame_n, True, bbox))
-                else:
-                    detections.append(VideoDetection(frame_n, False, bbox))
+            cap = None
+            frame_count = -1
+            frame_rate = -1.0
+            h = -1
+            w = -1
+            image = None
+            if(file.endswith(".mp4")):
+                try:
+                    cap = cv2.VideoCapture(MEDIA_PATH+file)
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    frame_rate = float(cap.get(cv2.CAP_PROP_FPS))
+                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    res, image = cap.read()
+                except:
+                    if(cap is not None):
+                        try:
+                            cap.release()
+                        except:
+                            pass
+                        cap = None
+            if((cap is None) or (image is None)):
+                video_probe = ffmpeg.probe(MEDIA_PATH+file, select_streams='v')['streams'][video_index]
+                frame_rate = float(eval(video_probe['r_frame_rate']))
+                try:
+                    frame_count = int(eval(video_probe['nb_frames']))
+                except:
+                    duration = video_probe['tags']['DURATION']
+                    frame_count = int(HHMMSSToSeconds(duration) * frame_rate)
+                h = int(video_probe['height'])
+                w = int(video_probe['width'])
+            
+            videoSettings = VideoSettings(frame_rate,h,w,frame_count,VIDEO_CRF,VIDEO_PRESET)
+            for i in range(0, frame_count-1, FRAME_SKIP):
+                try:
+                    frame_n = i
+                    if(cap is not None):
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_n-1)
+                        res, image = cap.read()
+                    else:
+                        t1 = float(frame_n)/frame_rate
+                        t2 = float(min(frame_n+2, frame_count))/frame_rate
+                        if((frame_n-1) >= frame_count):
+                            video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1))[str(video_index)]
+                        else:
+                            video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1), to=secondsToHHMMSS(t2))[str(video_index)]
+                        video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1))[str(video_index)]
+                        buffer, _ = (
+                            video
+                            .filter('select', 'gte(n,{})'.format(1))
+                            .output('pipe:', vframes=1, pix_fmt='bgr24', format='rawvideo', loglevel="quiet")
+                            .run(capture_stdout=True)
+                        )
+                        image = np.frombuffer(buffer, np.uint8, count=h*w*3).reshape(h, w, 3)
+                    detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
+                    if(detected):
+                        num_detections = num_detections+1
+                        detections.append(VideoDetection(frame_n, True, bbox))
+                    else:
+                        detections.append(VideoDetection(frame_n, False, bbox))
+                except:
+                    break
 
             if(len(detections) > 0):
                 video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, DO_CROP, CROP_SIZE_OFFSET, OUTPUT_MEDIA_PATH, TEMP_PATH, MAX_FRAMES_NO_CROP)
 
-
+    collected = gc.collect()
     stop = datetime.now()
     print("Processed "+str(num_images)+" images")
     print("Processed "+str(num_videos)+" videos")
