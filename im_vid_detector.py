@@ -539,6 +539,11 @@ def main(   INPUT_PATH=INPUT_PATH,
                     frame_count = int(HHMMSSToSeconds(duration) * frame_rate)
                 h = int(video_probe['height'])
                 w = int(video_probe['width'])
+                try:
+                    cap.release()
+                except:
+                    pass
+                cap = None
             
             videoSettings = VideoSettings(frame_rate,h,w,frame_count,VIDEO_CRF,VIDEO_PRESET)
             for i in range(0, frame_count-1, FRAME_SKIP):
