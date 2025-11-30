@@ -2,12 +2,12 @@ import os
 import numpy as np
 import cv2
 from ultralytics import YOLOE
-from ultralytics.models.yolo.yoloe import YOLOEVPSegPredictor
 from datetime import datetime
 import ffmpeg
 import time
 import argparse
 import gc
+import copy
 
 INPUT_PATH = "./input/"
 MASK_SAVE_PATH = "./output/masks/"
@@ -15,11 +15,11 @@ OUTPUT_MEDIA_PATH = "./output/media/"
 TEMP_PATH = "./temp/"
 DETECTION_TEXTS = [""]
 DO_CROP = True
-DETECT_THRESHOLD = 0.7 # 0.02 0.05 0.17 0.7
+DETECT_THRESHOLD = 0.7 # 0.02 0.05 0.7
 CROP_SIZE_OFFSET = 0.04
 FRAME_SKIP = 30
 MAX_FRAMES_NO_CROP = max(FRAME_SKIP*10, 48)
-MODEL_NAME = "yoloe-11m-seg-pf.pt" #"yoloe-11m-seg.pt" "yoloe-11m-seg-pf.pt"
+MODEL_NAME = "yoloe-11m-seg-pf.pt" #"yoloe-11m-seg.pt"
 VIDEO_CRF = 23
 VIDEO_PRESET = "superfast"
 
@@ -40,19 +40,33 @@ arg_descriptions = {
 }
 
 class VideoSettings:
-    def __init__(self, frame_rate, h, w, frame_count, VIDEO_CRF=23, VIDEO_PRESET="superfast"):
+    def __init__(self, frame_rate, h, w, frame_count, VIDEO_CRF=23, VIDEO_PRESET="superfast", video_index=None, audio_index=None):
         self.frame_rate = frame_rate
         self.h = h
         self.w = w
         self.frame_count = frame_count
         self.VIDEO_CRF = VIDEO_CRF
         self.VIDEO_PRESET = VIDEO_PRESET
+        self.video_index = video_index
+        self.audio_index = audio_index
         
 class VideoDetection:
     def __init__(self, frame_n, detected, bbox):
         self.frame_n = frame_n
         self.detected = detected
         self.bbox = bbox
+    
+class DetectionPreview:
+    def __init__(self, image, mask, bbox, score):
+        self.image = image
+        self.mask = mask
+        self.bbox = bbox
+        self.score = score
+        
+    def drawBbox(self):
+        drawed = copy.deepcopy(self.image)
+        cv2.rectangle(drawed, self.bbox[0:2], self.bbox[2:4], (255,0,0), round(self.image.shape[0]*0.01))
+        return drawed
     
 def secondsToHHMMSS(seconds):
     hhmmss = time.strftime("%H:%M:%S", time.gmtime(int(seconds)))
@@ -71,6 +85,97 @@ def HHMMSSToSeconds(hhmmss):
             x = float(eval(text_num)) * ratios[i]
             totalSeconds = totalSeconds + x
     return totalSeconds
+
+def init(   _INPUT_PATH=INPUT_PATH, 
+            _MASK_SAVE_PATH=MASK_SAVE_PATH, 
+            _OUTPUT_MEDIA_PATH=OUTPUT_MEDIA_PATH, 
+            _TEMP_PATH=TEMP_PATH, 
+            _DETECTION_TEXTS=DETECTION_TEXTS, 
+            _DO_CROP=DO_CROP,
+            _DETECT_THRESHOLD=DETECT_THRESHOLD, 
+            _CROP_SIZE_OFFSET=CROP_SIZE_OFFSET, 
+            _FRAME_SKIP=FRAME_SKIP, 
+            _MAX_FRAMES_NO_CROP=MAX_FRAMES_NO_CROP, 
+            _MODEL_NAME=MODEL_NAME, 
+            _VIDEO_CRF=VIDEO_CRF, 
+            _VIDEO_PRESET=VIDEO_PRESET   ):
+    global INPUT_PATH 
+    global MASK_SAVE_PATH 
+    global OUTPUT_MEDIA_PATH 
+    global TEMP_PATH 
+    global DETECTION_TEXTS
+    global DO_CROP 
+    global DETECT_THRESHOLD 
+    global CROP_SIZE_OFFSET 
+    global FRAME_SKIP 
+    global MAX_FRAMES_NO_CROP 
+    global MODEL_NAME 
+    global VIDEO_CRF 
+    global VIDEO_PRESET 
+    INPUT_PATH = _INPUT_PATH
+    INPUT_PATH = INPUT_PATH.replace("//", "/")
+    MASK_SAVE_PATH = _MASK_SAVE_PATH + str("/")
+    MASK_SAVE_PATH = MASK_SAVE_PATH.replace("//", "/")
+    OUTPUT_MEDIA_PATH = _OUTPUT_MEDIA_PATH + str("/")
+    OUTPUT_MEDIA_PATH = OUTPUT_MEDIA_PATH.replace("//", "/")
+    TEMP_PATH = _TEMP_PATH + str("/")
+    TEMP_PATH = TEMP_PATH.replace("//", "/")
+    model = None
+    if not isinstance(_DETECTION_TEXTS, list):
+        DETECTION_TEXTS = [str(_DETECTION_TEXTS)]
+    else:
+        DETECTION_TEXTS = _DETECTION_TEXTS
+    if(len(DETECTION_TEXTS[0]) > 0):
+        MODEL_NAME = _MODEL_NAME.replace("-pf", "")
+        model = YOLOE(MODEL_NAME)
+        for i in range(len(DETECTION_TEXTS)):
+            DETECTION_TEXTS[i] = DETECTION_TEXTS[i].replace("\"", "")
+        model.set_classes(DETECTION_TEXTS, model.get_text_pe(DETECTION_TEXTS))
+    else:
+        MODEL_NAME = _MODEL_NAME.replace(".pt", "-pf.pt")
+        MODEL_NAME = MODEL_NAME.replace("-pf-pf", "-pf")
+        model = YOLOE(MODEL_NAME)
+    DO_CROP = bool(int(_DO_CROP))
+    DETECT_THRESHOLD = float(_DETECT_THRESHOLD)
+    CROP_SIZE_OFFSET = float(_CROP_SIZE_OFFSET)
+    FRAME_SKIP = int(_FRAME_SKIP)
+    MAX_FRAMES_NO_CROP = int(_MAX_FRAMES_NO_CROP)
+    VIDEO_CRF = int(_VIDEO_CRF)
+    VIDEO_PRESET = str(_VIDEO_PRESET)
+        
+    MEDIA_PATH = ""
+    num_files = 0
+    num_images = 0
+    num_videos = 0
+    files = []
+    if(os.path.isdir(INPUT_PATH)):
+        MEDIA_PATH = INPUT_PATH + str("/")
+        MEDIA_PATH = MEDIA_PATH.replace("//", "/")
+        files = os.listdir(MEDIA_PATH)
+        num_files = len(files)
+        print("Input directory has "+str(num_files)+" files")
+    else:
+        MEDIA_PATH = os.path.dirname(INPUT_PATH) + str("/")
+        MEDIA_PATH = MEDIA_PATH.replace("//", "/")
+        files = [os.path.basename(INPUT_PATH)]
+    media_files = []
+    for file in files:
+        if (file.endswith(".png") or file.endswith(".jpg")):
+            num_images = num_images+1
+            media_files.append(file)
+        if(file.endswith(".mp4") or file.endswith(".mkv")):
+            num_videos = num_videos+1
+            media_files.append(file)
+        
+    return model, MEDIA_PATH, media_files, num_images, num_videos
+
+def split_path_filename(path):
+    values = path.split('/')
+    path = ""
+    file = values[-1]
+    for i in range(len(values)-1):
+        path = path + values[i] + "/"
+    return path, file
 
 #get new path if file already exists
 def suggest_path(output_file_path):
@@ -172,6 +277,89 @@ def get_streams_id(path):
         audio_index = int(audio_probe['streams'][0]['index'])
     return video_index, audio_index
 
+def load_video_data(path):
+    video_index = 0
+    audio_index = 1
+    has_video = False
+    frame_count = -1
+    frame_rate = -1.0
+    h = -1
+    w = -1
+    cap = None
+    use_opencv = False
+    video_index, audio_index = get_streams_id(path)
+    if video_index >= 0:
+        has_video = True
+    else:
+        print("-skipping file without video stream")
+        return video_index, audio_index, frame_count, frame_rate, h, w, use_opencv
+    image = None
+    if(path.endswith(".mp4")):
+        try:
+            cap = cv2.VideoCapture(path)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            frame_rate = float(cap.get(cv2.CAP_PROP_FPS))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            res, image = cap.read()
+            if(res):
+                use_opencv = True
+        except:
+            use_opencv = False
+            if(cap is not None):
+                try:
+                    cap.release()
+                except:
+                    pass
+                cap = None
+    if(not use_opencv):
+        video_probe = ffmpeg.probe(path, select_streams='v')['streams'][video_index]
+        frame_rate = float(eval(video_probe['r_frame_rate']))
+        try:
+            frame_count = int(eval(video_probe['nb_frames']))
+        except:
+            duration = video_probe['tags']['DURATION']
+            frame_count = int(HHMMSSToSeconds(duration) * frame_rate)
+        h = int(video_probe['height'])
+        w = int(video_probe['width'])
+        try:
+            cap.release()
+        except:
+            pass
+        cap = None
+        use_opencv = False
+    return video_index, audio_index, frame_count, frame_rate, h, w, use_opencv
+
+def readFrame(path, videoSettings, frame_n, cap=None):
+    path, file = split_path_filename(path)
+    w = videoSettings.w
+    h = videoSettings.h
+    frame_rate = videoSettings.frame_rate
+    frame_count = videoSettings.frame_count
+    video_index = videoSettings.video_index
+    video = None
+    image = None
+    
+    if(cap is not None):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_n-1)
+        res, image = cap.read()
+    else:
+        t1 = float(frame_n)/frame_rate
+        t2 = float(min(frame_n+2, frame_count))/frame_rate
+        if((frame_n+1) >= frame_count):
+            video = ffmpeg.input(path+file, ss=secondsToHHMMSS(t1))[str(video_index)]
+        else:
+            video = ffmpeg.input(path+file, ss=secondsToHHMMSS(t1), to=secondsToHHMMSS(t2))[str(video_index)]
+        buffer, _ = (
+                        video
+                        .filter('select', 'gte(n,{})'.format(1))
+                        .output('pipe:', vframes=1, pix_fmt='bgr24', format='rawvideo', loglevel="quiet")
+                        .run(capture_stdout=True)
+                    )
+        image = np.frombuffer(buffer, np.uint8, count=h*w*3).reshape(h, w, 3)
+    return image
+
 def merge_video_files(partial_files, output_file_path):
     dir_path = os.path.dirname(output_file_path) + str("/")
     dir_path = dir_path.replace("//", "/")
@@ -206,6 +394,8 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
     frame_count = videoSettings.frame_count
     VIDEO_CRF = videoSettings.VIDEO_CRF
     VIDEO_PRESET = videoSettings.VIDEO_PRESET
+    video_index = videoSettings.video_index
+    audio_index = videoSettings.audio_index
     frame_detection_ranges = []
     start_frame = 0
     end_frame = 0
@@ -286,11 +476,9 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
         try:
             video = None
             audio = None
-            video_index = 0
-            audio_index = 1
             has_audio = False
             has_video = False
-            video_index, audio_index = get_streams_id(MEDIA_PATH+file)
+            # video_index, audio_index = get_streams_id(MEDIA_PATH+file)
             if audio_index is not None:
                 if audio_index >= 0:
                     has_audio = True
@@ -379,102 +567,143 @@ def video_cut_and_merge_detections(MEDIA_PATH, file, detections, videoSettings, 
             os.remove(f)
     return output_file_path
 
-def main(   INPUT_PATH=INPUT_PATH, 
-            MASK_SAVE_PATH=MASK_SAVE_PATH, 
-            OUTPUT_MEDIA_PATH=OUTPUT_MEDIA_PATH, 
-            TEMP_PATH=TEMP_PATH, 
-            DETECTION_TEXTS=DETECTION_TEXTS, 
-            DO_CROP=DO_CROP,
-            DETECT_THRESHOLD=DETECT_THRESHOLD, 
-            CROP_SIZE_OFFSET=CROP_SIZE_OFFSET, 
-            FRAME_SKIP=FRAME_SKIP, 
-            MAX_FRAMES_NO_CROP=MAX_FRAMES_NO_CROP, 
-            MODEL_NAME=MODEL_NAME, 
-            VIDEO_CRF=VIDEO_CRF, 
-            VIDEO_PRESET=VIDEO_PRESET   ):
-    parser = argparse.ArgumentParser(description="Image and video detector. Program can scan all media in folder using AI model and return only those that match specified target. Processing is done locally.")
-    parser.add_argument("--input", help=arg_descriptions["INPUT_PATH"], default=INPUT_PATH)
-    parser.add_argument("--masks", help=arg_descriptions["MASK_SAVE_PATH"], default=MASK_SAVE_PATH)
-    parser.add_argument("--output_media", help=arg_descriptions["OUTPUT_MEDIA_PATH"], default=OUTPUT_MEDIA_PATH)
-    parser.add_argument("--temp", help=arg_descriptions["TEMP_PATH"], default=TEMP_PATH)
-    parser.add_argument("--prompt", help=arg_descriptions["DETECTION_TEXTS"], default=DETECTION_TEXTS[0])
-    parser.add_argument("--crop", help=arg_descriptions["DO_CROP"], default=DO_CROP)
-    parser.add_argument("--threshold", help=arg_descriptions["DETECT_THRESHOLD"], default=DETECT_THRESHOLD)
-    parser.add_argument("--crop_offset", help=arg_descriptions["CROP_SIZE_OFFSET"], default=CROP_SIZE_OFFSET)
-    parser.add_argument("--frame_skip", help=arg_descriptions["FRAME_SKIP"], default=FRAME_SKIP)
-    parser.add_argument("--model", help=arg_descriptions["MODEL_NAME"], default=MODEL_NAME)
-    parser.add_argument("--max_frames_no_crop", help=arg_descriptions["MAX_FRAMES_NO_CROP"], default=MAX_FRAMES_NO_CROP)
-    parser.add_argument("--crf", help=arg_descriptions["VIDEO_CRF"], default=VIDEO_CRF)
-    parser.add_argument("--video_preset", help=arg_descriptions["VIDEO_PRESET"], default=VIDEO_PRESET)
+def sample_n_files( N, 
+                    INPUT_PATH_=INPUT_PATH, 
+                    DETECTION_TEXTS_=DETECTION_TEXTS, 
+                    DO_CROP_=DO_CROP, 
+                    DETECT_THRESHOLD_=DETECT_THRESHOLD, 
+                    CROP_SIZE_OFFSET_=CROP_SIZE_OFFSET,                      
+                    MODEL_NAME_=MODEL_NAME ):
     
-    args = parser.parse_args()
-    if args.input is not None:
-        INPUT_PATH = str(args.input)
-    if args.masks is not None:
-        MASK_SAVE_PATH = str(args.masks)
-        MASK_SAVE_PATH = MASK_SAVE_PATH + str("/")
-        MASK_SAVE_PATH = MASK_SAVE_PATH.replace("//", "/")
-    if args.output_media is not None:
-        OUTPUT_MEDIA_PATH = str(args.output_media)
-        OUTPUT_MEDIA_PATH = OUTPUT_MEDIA_PATH + str("/")
-        OUTPUT_MEDIA_PATH = OUTPUT_MEDIA_PATH.replace("//", "/")
-    if args.temp is not None:
-        TEMP_PATH = str(args.temp)
-        TEMP_PATH = TEMP_PATH + str("/")
-        TEMP_PATH = TEMP_PATH.replace("//", "/")
-    if args.prompt is not None:
-        DETECTION_TEXTS = [str(args.prompt)]
-    if args.crop is not None:
-        DO_CROP = bool(int(args.crop))
-    if args.threshold is not None:
-        DETECT_THRESHOLD = float(args.threshold)
-    if args.crop_offset is not None:
-        CROP_SIZE_OFFSET = float(args.crop_offset)
-    if args.frame_skip is not None:
-        FRAME_SKIP = int(args.frame_skip)
-    if args.model is not None:
-        MODEL_NAME = str(args.model)
-    if args.max_frames_no_crop is not None:
-        MAX_FRAMES_NO_CROP = int(args.max_frames_no_crop)
-    if args.crf is not None:
-        VIDEO_CRF = int(args.crf)
-    if args.video_preset is not None:
-        VIDEO_PRESET = str(args.video_preset)
-        
+    model, MEDIA_PATH, files, num_images, num_videos  = init(    INPUT_PATH_, 
+                                                                MASK_SAVE_PATH, 
+                                                                OUTPUT_MEDIA_PATH, 
+                                                                TEMP_PATH, 
+                                                                DETECTION_TEXTS_, 
+                                                                DO_CROP_, 
+                                                                DETECT_THRESHOLD_, 
+                                                                CROP_SIZE_OFFSET_, 
+                                                                FRAME_SKIP, 
+                                                                MAX_FRAMES_NO_CROP, 
+                                                                MODEL_NAME_, 
+                                                                VIDEO_CRF, 
+                                                                VIDEO_PRESET   )
+    indices = None
+    indices = np.linspace(0, num_images+num_videos-1, min(N, num_images+num_videos))
+    indices = np.round(indices).astype(np.int64)
+    files2 = np.array(files)[indices].tolist()
+    addedVideoFrames = False #whether multiple frames were added from single video
+    detections = []
+    for file in files2:
+        if (file.endswith(".png") or file.endswith(".jpg")):
+            image = cv2.imread(MEDIA_PATH+file)
+            h,w = image.shape[0:2]
+            detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
+            if(detected):
+                x1, y1, x2, y2 = bbox_offset(bbox, CROP_SIZE_OFFSET, h, w)
+                bbox = np.array([x1, y1, x2, y2])
+            detections.append(DetectionPreview(image, mask, bbox, score))
+        if(file.endswith(".mp4") or file.endswith(".mkv")):
+            collected = gc.collect()
+            cap = None
+            video_index, audio_index, frame_count, frame_rate, h, w, use_opencv = load_video_data(MEDIA_PATH+file)
+            if(use_opencv):
+                cap = cv2.VideoCapture(MEDIA_PATH+file)
+            videoSettings = VideoSettings(frame_rate,h,w,frame_count,VIDEO_CRF,VIDEO_PRESET,video_index,audio_index)
+            frames = [int(frame_count / 2)]
+            if((len(files2)<N) and (not addedVideoFrames)):
+                n2 = 1 + N - len(files2)
+                frames = np.linspace(0, frame_count-1, n2)
+                frames = np.floor(frames)
+            for frame_n in frames:
+                try:
+                    image = readFrame(MEDIA_PATH+file, videoSettings, frame_n, cap)
+                    detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
+                    if(detected):
+                        x1, y1, x2, y2 = bbox_offset(bbox, CROP_SIZE_OFFSET, h, w)
+                        bbox = np.array([x1, y1, x2, y2])
+                    detections.append(DetectionPreview(image, mask, bbox, score))
+                    addedVideoFrames = True
+                except:
+                    pass
     collected = gc.collect()
-
-    start = datetime.now()
-    model = None
-    if(len(DETECTION_TEXTS[0]) > 0):
-        MODEL_NAME = MODEL_NAME.replace("-pf", "")
-        model = YOLOE(MODEL_NAME)
-        for i in range(len(DETECTION_TEXTS)):
-            DETECTION_TEXTS[i] = DETECTION_TEXTS[i].replace("\"", "")
-        model.set_classes(DETECTION_TEXTS, model.get_text_pe(DETECTION_TEXTS))
-    else:
-        MODEL_NAME = MODEL_NAME.replace(".pt", "-pf.pt")
-        MODEL_NAME = MODEL_NAME.replace("-pf-pf", "-pf")
-        model = YOLOE(MODEL_NAME)
+    return detections
     
-    MEDIA_PATH = ""
-    num_files = 0
-    num_images = 0
-    num_videos = 0
-    num_detections = 0
-    files = []
-    if(os.path.isdir(INPUT_PATH)):
-        MEDIA_PATH = INPUT_PATH + str("/")
-        MEDIA_PATH = MEDIA_PATH.replace("//", "/")
-        files = os.listdir(MEDIA_PATH)
-        num_files = len(files)
-        print("Input directory has "+str(num_files)+" files")
-    else:
-        MEDIA_PATH = os.path.dirname(INPUT_PATH) + str("/")
-        MEDIA_PATH = MEDIA_PATH.replace("//", "/")
-        files = [os.path.basename(INPUT_PATH)]
+
+def main(   INPUT_PATH_=INPUT_PATH, 
+            MASK_SAVE_PATH_=MASK_SAVE_PATH, 
+            OUTPUT_MEDIA_PATH_=OUTPUT_MEDIA_PATH, 
+            TEMP_PATH_=TEMP_PATH, 
+            DETECTION_TEXTS_=DETECTION_TEXTS, 
+            DO_CROP_=DO_CROP,
+            DETECT_THRESHOLD_=DETECT_THRESHOLD, 
+            CROP_SIZE_OFFSET_=CROP_SIZE_OFFSET, 
+            FRAME_SKIP_=FRAME_SKIP, 
+            MAX_FRAMES_NO_CROP_=MAX_FRAMES_NO_CROP, 
+            MODEL_NAME_=MODEL_NAME, 
+            VIDEO_CRF_=VIDEO_CRF, 
+            VIDEO_PRESET_=VIDEO_PRESET   ):
+    
+    parser = argparse.ArgumentParser(description="Image and video detector. Program can scan all media in folder using AI model and return only those that match specified target. Processing is done locally.")
+    parser.add_argument("--input", help=arg_descriptions["INPUT_PATH"])
+    parser.add_argument("--masks", help=arg_descriptions["MASK_SAVE_PATH"])
+    parser.add_argument("--output_media", help=arg_descriptions["OUTPUT_MEDIA_PATH"])
+    parser.add_argument("--temp", help=arg_descriptions["TEMP_PATH"])
+    parser.add_argument("--prompt", help=arg_descriptions["DETECTION_TEXTS"])
+    parser.add_argument("--crop", help=arg_descriptions["DO_CROP"])
+    parser.add_argument("--threshold", help=arg_descriptions["DETECT_THRESHOLD"])
+    parser.add_argument("--crop_offset", help=arg_descriptions["CROP_SIZE_OFFSET"])
+    parser.add_argument("--frame_skip", help=arg_descriptions["FRAME_SKIP"])
+    parser.add_argument("--model", help=arg_descriptions["MODEL_NAME"])
+    parser.add_argument("--max_frames_no_crop", help=arg_descriptions["MAX_FRAMES_NO_CROP"])
+    parser.add_argument("--crf", help=arg_descriptions["VIDEO_CRF"])
+    parser.add_argument("--video_preset", help=arg_descriptions["VIDEO_PRESET"])
+    args = parser.parse_args()
+
+    if args.input is not None:
+        INPUT_PATH_ = args.input
+    if args.masks is not None:
+        MASK_SAVE_PATH_ = args.masks
+    if args.output_media is not None:
+        OUTPUT_MEDIA_PATH_ = args.output_media
+    if args.temp is not None:
+        TEMP_PATH_ = args.temp
+    if args.prompt is not None:
+        DETECTION_TEXTS_ = args.prompt
+    if args.crop is not None:
+        DO_CROP_ = args.crop
+    if args.threshold is not None:
+        DETECT_THRESHOLD_ = args.threshold
+    if args.crop_offset is not None:
+        CROP_SIZE_OFFSET_ = args.crop_offset
+    if args.frame_skip is not None:
+        FRAME_SKIP_ = args.frame_skip
+    if args.model is not None:
+        MODEL_NAME_ = args.model
+    if args.max_frames_no_crop is not None:
+        MAX_FRAMES_NO_CROP_ = args.max_frames_no_crop
+    if args.crf is not None:
+        VIDEO_CRF_ = args.crf
+    if args.video_preset is not None:
+        VIDEO_PRESET_ = args.video_preset
+    
+    start = datetime.now()    
+    model, MEDIA_PATH, files, num_images, num_videos  = init(   INPUT_PATH_, 
+                                                                MASK_SAVE_PATH_, 
+                                                                OUTPUT_MEDIA_PATH_, 
+                                                                TEMP_PATH_, 
+                                                                DETECTION_TEXTS_, 
+                                                                DO_CROP_, 
+                                                                DETECT_THRESHOLD_, 
+                                                                CROP_SIZE_OFFSET_, 
+                                                                FRAME_SKIP_, 
+                                                                MAX_FRAMES_NO_CROP_, 
+                                                                MODEL_NAME_, 
+                                                                VIDEO_CRF_, 
+                                                                VIDEO_PRESET_   )
+    num_detections = 0    
     for file in files:
         if (file.endswith(".png") or file.endswith(".jpg")):
-            num_images = num_images+1
             image = cv2.imread(MEDIA_PATH+file)
             h,w = image.shape[0:2]
             detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
@@ -493,80 +722,18 @@ def main(   INPUT_PATH=INPUT_PATH,
                 save_image(output_image, OUTPUT_MEDIA_PATH + file)
                 
         if(file.endswith(".mp4") or file.endswith(".mkv")):
-            collected = gc.collect()
-            video = None
-            audio = None
-            video_index = 0
-            audio_index = 1
-            has_video = False
-            video_index, audio_index = get_streams_id(MEDIA_PATH+file)
-            if video_index >= 0:
-                has_video = True
-            else:
-                print("-skipping file without video stream")
-                continue
-            num_videos = num_videos+1
+            collected = gc.collect()            
             detections = []
             cap = None
-            frame_count = -1
-            frame_rate = -1.0
-            h = -1
-            w = -1
-            image = None
-            if(file.endswith(".mp4")):
-                try:
-                    cap = cv2.VideoCapture(MEDIA_PATH+file)
-                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    frame_rate = float(cap.get(cv2.CAP_PROP_FPS))
-                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    res, image = cap.read()
-                except:
-                    if(cap is not None):
-                        try:
-                            cap.release()
-                        except:
-                            pass
-                        cap = None
-            if((cap is None) or (image is None)):
-                video_probe = ffmpeg.probe(MEDIA_PATH+file, select_streams='v')['streams'][video_index]
-                frame_rate = float(eval(video_probe['r_frame_rate']))
-                try:
-                    frame_count = int(eval(video_probe['nb_frames']))
-                except:
-                    duration = video_probe['tags']['DURATION']
-                    frame_count = int(HHMMSSToSeconds(duration) * frame_rate)
-                h = int(video_probe['height'])
-                w = int(video_probe['width'])
-                try:
-                    cap.release()
-                except:
-                    pass
-                cap = None
             
-            videoSettings = VideoSettings(frame_rate,h,w,frame_count,VIDEO_CRF,VIDEO_PRESET)
+            video_index, audio_index, frame_count, frame_rate, h, w, use_opencv = load_video_data(MEDIA_PATH+file)
+            if(use_opencv):
+                cap = cv2.VideoCapture(MEDIA_PATH+file)
+            videoSettings = VideoSettings(frame_rate,h,w,frame_count,VIDEO_CRF,VIDEO_PRESET,video_index, audio_index)
             for i in range(0, frame_count-1, FRAME_SKIP):
                 try:
                     frame_n = i
-                    if(cap is not None):
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_n-1)
-                        res, image = cap.read()
-                    else:
-                        t1 = float(frame_n)/frame_rate
-                        t2 = float(min(frame_n+2, frame_count))/frame_rate
-                        if((frame_n-1) >= frame_count):
-                            video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1))[str(video_index)]
-                        else:
-                            video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1), to=secondsToHHMMSS(t2))[str(video_index)]
-                        video = ffmpeg.input(MEDIA_PATH+file, ss=secondsToHHMMSS(t1))[str(video_index)]
-                        buffer, _ = (
-                            video
-                            .filter('select', 'gte(n,{})'.format(1))
-                            .output('pipe:', vframes=1, pix_fmt='bgr24', format='rawvideo', loglevel="quiet")
-                            .run(capture_stdout=True)
-                        )
-                        image = np.frombuffer(buffer, np.uint8, count=h*w*3).reshape(h, w, 3)
+                    image = readFrame(MEDIA_PATH+file, videoSettings, frame_n, cap)
                     detected, mask, bbox, score = process_frame(model, image, DETECT_THRESHOLD)
                     if(detected):
                         num_detections = num_detections+1
@@ -585,6 +752,8 @@ def main(   INPUT_PATH=INPUT_PATH,
     print("Processed "+str(num_videos)+" videos")
     print("Detected "+str(num_detections)+" objects")
     print("Elapsed time = "+str(stop-start)+" [h][m][s]")
+
+
 
 if __name__ == "__main__":
     main()
