@@ -109,7 +109,10 @@ Start program by double clicking on **run_gui.sh** or open console and run the f
 ./run_gui.sh
 ```
 Example video processing 
-![gui_video_detection](./resources/gui_video_detection.png)
+![gui_video_detection](./resources/gui_video_detection.png)  
+
+Example video detection preview 
+![gui_video_preview](./resources/gui_video_preview.jpg)
 
 ### CLI  
 If venv is not currently activated then activate as shown in installation step 3 [instructions](#Installation-inside-venv).  
