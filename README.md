@@ -160,4 +160,4 @@ For prompt keywords check this list of predefined classes [classes](https://gith
 
 # License:  
 Scripts and assets in this project are licensed under the MIT license.  
-Third-Party components that are installed separately may require getting addional license for commercial use. AI models are not part of this repositoy and need to be provided by the user or automatically downloaded. See [ultralytics license](https://www.ultralytics.com/license) for more information.  
+Third-party components installed separately may require an additional license for commercial use. AI models are not part of this repositoy and need to be provided by the user or automatically downloaded. See [ultralytics license](https://www.ultralytics.com/license) for more information.  
