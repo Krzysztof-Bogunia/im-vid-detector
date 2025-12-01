@@ -109,7 +109,10 @@ Start program by double clicking on **run_gui.sh** or open console and run the f
 ./run_gui.sh
 ```
 Example video processing 
-![gui_video_detection](./resources/gui_video_detection.png)
+![gui_video_detection](./resources/gui_video_detection.png)  
+
+Example video detection preview 
+![gui_video_preview](./resources/gui_video_preview.jpg)
 
 ### CLI  
 If venv is not currently activated then activate as shown in installation step 3 [instructions](#Installation-inside-venv).  
@@ -153,4 +156,8 @@ https://github.com/user-attachments/assets/613effc8-d2d1-406c-936a-8778a215cdbd
 
 
 
-For prompt keywords check this list of predefined classes [classes](https://github.com/xinyu1205/recognize-anything/blob/main/ram/data/ram_tag_list.txt)
+For prompt keywords check this list of predefined classes [classes](https://github.com/xinyu1205/recognize-anything/blob/main/ram/data/ram_tag_list.txt)  
+
+# License:  
+Scripts and assets in this project are licensed under the MIT license.  
+Third-Party components that are installed separately may require getting addional license for commercial use. AI models are not part of this repositoy and need to be provided by the user or automatically downloaded. See [ultralytics license](https://www.ultralytics.com/license) for more information.  
