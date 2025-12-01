@@ -153,4 +153,8 @@ https://github.com/user-attachments/assets/613effc8-d2d1-406c-936a-8778a215cdbd
 
 
 
-For prompt keywords check this list of predefined classes [classes](https://github.com/xinyu1205/recognize-anything/blob/main/ram/data/ram_tag_list.txt)
+For prompt keywords check this list of predefined classes [classes](https://github.com/xinyu1205/recognize-anything/blob/main/ram/data/ram_tag_list.txt)  
+
+# License:  
+Scripts and assets in this project are licensed under the MIT license.  
+Third-Party components that are installed separately may require getting addional license for commercial use. AI models are not part of this repositoy and need to be provided by the user or automatically downloaded. See [ultralytics license](https://www.ultralytics.com/license) for more information.  
