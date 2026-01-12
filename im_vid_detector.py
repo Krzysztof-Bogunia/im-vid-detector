@@ -314,7 +314,7 @@ def load_video_data(path):
                     pass
                 cap = None
     if(not use_opencv):
-        video_probe = ffmpeg.probe(path, select_streams='v')['streams'][video_index]
+        video_probe = ffmpeg.probe(path)['streams'][video_index]
         frame_rate = float(eval(video_probe['r_frame_rate']))
         try:
             frame_count = int(eval(video_probe['nb_frames']))
