@@ -1,7 +1,6 @@
 #torch torchvision --index-url https://download.pytorch.org/whl/cu129
 opencv-python
 ultralytics
-moviepy
 ffmpeg-python
 
 clip @ git+https://github.com/ultralytics/CLIP.git
